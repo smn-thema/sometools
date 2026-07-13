@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>共同編集 絵コンテツール</title>
+<style>
+  :root {
+    --ink: #1C1C1A;
+    --sub: #6B6B64;
+    --line: #D8D5CC;
+    --line-strong: #B8B4A8;
+    --paper: #FBFAF6;
+    --card: #FFFFFF;
+    --accent: #0F6E56;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+    padding: 32px 24px 80px;
+  }
+  .wrap { max-width: 1160px; margin: 0 auto; }
+  
+  @media print {
+    @page { margin: 0; size: A4 portrait; }
+    body { padding: 15mm; background: #fff; }
+    .toolbar, .addrow, .actions, .handle .grip, .sub, .clear-img, .loading, .share-area { display: none !important; }
+    .header-row { display: grid !important; }
+    .card { break-inside: avoid; border: 1px solid #999; margin-bottom: 8px; }
+    textarea, input { border: none !important; resize: none; background: transparent !important; }
+    .imgbox { border-style: solid; cursor: default; }
+    .title-input { border: none; }
+    .handle { background: #fff; border-right: 1px solid #ccc; }
+  }
+
+  .title-row { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 22px; flex-wrap: wrap; gap: 10px; }
+  .title-input {
+    font-size: 20px; font-weight: 700; letter-spacing: 0.02em; border: none; background: none; color: var(--ink);
+    font-family: inherit; padding: 2px 0; border-bottom: 1.5px solid transparent; min-width: 280px; width: 100%;
+  }
+  .title-input:focus { outline: none; border-bottom: 1.5px solid var(--accent); }
+  .sub { font-size: 12px; color: var(--sub); margin-top: 6px; }
+  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; }
+  
+  button {
+    font-family: inherit; font-size: 12.5px; border: 1px solid var(--line-strong); background: var(--card);
+    color: var(--ink); padding: 7px 14px; border-radius: 5px; cursor: pointer; transition: 0.2s;
+  }
+  button:hover { background: #F1EFE6; }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button.primary:hover { background: #0C5A45; }
+
+  .header-row, .card {
+    display: grid;
+    grid-template-columns: 56px 200px 1fr 1fr 1fr 90px;
+    grid-template-areas: "handle image cutcol narcol notecol actionscol";
+    gap: 0;
+  }
+  .header-row { margin-bottom: 6px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; margin-bottom: 10px; transition: border-color 0.2s; }
+  
+  body.bottom-note .header-row .card {
+    grid-template-columns: 56px 200px 1fr 1fr 90px;
+    grid-template-areas:
+      "handle image cutcol narcol actionscol"
+      "handle notecol notecol notecol actionscol";
+  }
+  body.bottom-note .card {
+    grid-template-columns: 56px 200px 1fr 1fr 90px;
+    grid-template-areas:
+      "handle image cutcol narcol actionscol"
+      "handle notecol notecol notecol actionscol";
+  }
+  body.bottom-note .notecol textarea { height: 56px; }
+  body.bottom-note .header-row .notecol { padding-top: 4px; }
+  body.bottom-note .narcol { border-right: none; }
+  body.bottom-note .notecol { border-right: none; border-top: 1px solid var(--line); }
+
+  .h-handle { grid-area: handle; } .h-image { grid-area: image; } .h-cut { grid-area: cutcol; }
+  .h-nar { grid-area: narcol; } .h-note { grid-area: notecol; } .h-actions { grid-area: actionscol; }
+  
+  .header-row input {
+    font-family: inherit; font-size: 11px; color: var(--sub); letter-spacing: 0.06em;
+    border: none; background: none; padding: 0 12px; width: 100%; font-weight: bold;
+  }
+  .header-row input:focus { outline: none; color: var(--ink); }
+
+  #cards { display: flex; flex-direction: column; gap: 10px; }
+
+  /* ドラッグ＆ドロップ時の見た目効果 */
+  .card.dragging { opacity: 0.35; }
+  .card.drop-target { border-color: var(--accent); box-shadow: 0 0 5px rgba(15, 110, 86, 0.5); }
+
+  .handle {
+    grid-area: handle; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+    background: #F4F2EA; border-right: 1px solid var(--line); padding: 8px 0; cursor: grab; user-select: none;
+  }
+  .handle:active { cursor: grabbing; }
+  .handle .num { font-size: 11px; font-weight: 700; color: var(--accent); }
+  .handle .grip { font-size: 14px; color: var(--sub); letter-spacing: 2px; line-height: 1; }
+
+  .col { padding: 12px 14px; border-right: 1px solid var(--line); border-bottom: 1px solid transparent; }
+  .imgcol { grid-area: image; display: flex; align-items: center; justify-content: center; flex-direction: column; padding: 10px; }
+  .cutcol { grid-area: cutcol; } .narcol { grid-area: narcol; border-right: 1px solid var(--line); } .notecol { grid-area: notecol; }
+  .actions { grid-area: actionscol; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 8px; }
+
+  .imgbox {
+    width: 100%; aspect-ratio: 4/3; border: 1.5px dashed var(--line-strong); border-radius: 6px;
+    display: flex; align-items: center; justify-content: center; color: var(--sub); font-size: 11px;
+    cursor: pointer; text-align: center; background: #FAF9F4; overflow: hidden; position: relative;
+  }
+  .imgbox img { width: 100%; height: 100%; object-fit: contain; }
+  .imgbox input { display: none; }
+  .imgbox.has-img { border-style: solid; }
+  .clear-img { margin-top: 6px; font-size: 10px; color: var(--sub); background: none; border: none; text-decoration: underline; cursor: pointer; padding: 0; }
+  .loading { position: absolute; background: rgba(255,255,255,0.8); width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-weight: bold; color: var(--accent); }
+
+  textarea {
+    width: 100%; height: 100px; resize: vertical; border: 1px solid var(--line); border-radius: 5px;
+    font-family: inherit; font-size: 12.5px; line-height: 1.6; padding: 8px; color: var(--ink); background: #FFFEFC;
+  }
+  textarea:focus { outline: none; border-color: var(--accent); }
+
+  .icon-btn { width: 100%; font-size: 11px; padding: 5px 0; border: 1px solid var(--line); background: #fff; border-radius: 4px; }
+  .icon-btn.del { color: #9A3B2E; border-color: #E3C7C0; }
+  .icon-btn.del:hover { background: #FBEDEA; }
+  .addrow { margin-top: 14px; display: flex; justify-content: center; }
+
+  .share-area { background: #E8F5E9; padding: 10px; border-radius: 5px; margin-bottom: 15px; display: flex; align-items: center; gap: 10px; font-size: 12px;}
+  .share-area input { flex: 1; padding: 5px; border: 1px solid #ccc; border-radius: 3px; font-size: 12px;}
+</style>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+</head>
+<body>
+
+<div class="wrap" id="exportArea">
+  <div class="title-row">
+    <div style="flex:1;">
+      <input class="title-input" id="titleInput" value="読み込み中..." placeholder="絵コンテのタイトルを入力">
+      <div class="sub">URLを共有するだけでリアルタイム共同編集が可能です。画像は自動で圧縮保存されます。</div>
+    </div>
+    <div class="toolbar">
+      <button class="toggle" id="layoutToggle">レイアウト：備考を下段に</button>
+      <button id="pdfBtn">PDFで書き出し</button>
+      <button class="primary" id="addBtn">＋ カットを追加</button>
+    </div>
+  </div>
+
+  <div class="share-area">
+    <strong>🔗 共同編集URL：</strong>
+    <input type="text" id="shareUrl" readonly>
+    <button onclick="copyUrl()">コピー</button>
+  </div>
+
+  <div class="header-row">
+    <span class="h-handle"></span>
+    <input class="h-image" id="hImg" value="カット画像">
+    <input class="h-cut" id="hCut" value="カット内容">
+    <input class="h-nar" id="hNar" value="ナレーション">
+    <input class="h-note" id="hNote" value="備考">
+    <span class="h-actions"></span>
+  </div>
+
+  <div id="cards"></div>
+
+  <div class="addrow">
+    <button class="primary" id="addBtnBottom">＋ カットを追加</button>
+  </div>
+</div>
+
+<script>
+  // Firebase 初期化
+  const firebaseConfig = {
+    apiKey: "AIzaSyDkUutAJ4Ik5aQG4dYKH_1LgXAviU_4KOU",
+    authDomain: "econte-app-941a8.firebaseapp.com",
+    projectId: "econte-app-941a8",
+    storageBucket: "econte-app-941a8.firebasestorage.app",
+    messagingSenderId: "271823565970",
+    appId: "1:271823565970:web:8526a0c4a79c301938e24b"
+  };
+  
+  if (!firebase.apps.length) {
+      firebase.initializeApp(firebaseConfig);
+  }
+  const db = firebase.firestore();
+
+  let boardId = "";
+  try {
+      boardId = window.location.hash.replace('#', '');
+      if (!boardId) {
+          boardId = Math.random().toString(36).substring(2, 10);
+          window.location.hash = boardId;
+      }
+      document.getElementById('shareUrl').value = window.location.href;
+  } catch(e) {
+      boardId = "local-test-id";
+      document.getElementById('shareUrl').value = "ローカル環境";
+  }
+
+  let cards = [];
+  let dragId = null; // ドラッグ中のカードIDを保持する変数
+  let headers = { img: "カット画像", cut: "カット内容", nar: "ナレーション", note: "備考" };
+  let isLocalChange = false;
+  const cardsEl = document.getElementById('cards');
+
+  // データベースへ保存
+  function saveToDB() {
+    isLocalChange = true;
+    db.collection("storyboards").doc(boardId).set({ 
+        title: document.getElementById('titleInput').value, 
+        headers: headers,
+        cards: cards 
+    }).catch(function(error) {
+        if(error.code === 'resource-exhausted') {
+            alert("データサイズが大きすぎます。画像の枚数を減らすか、より小さな画像を使用してください。");
+        } else {
+            console.error("保存エラー:", error);
+        }
+    });
+    setTimeout(function() { isLocalChange = false; }, 1000);
+  }
+
+  // データベースからのリアルタイム受信
+  db.collection("storyboards").doc(boardId).onSnapshot(function(docSnap) {
+    if (isLocalChange) return;
+    if (docSnap.exists) {
+      const data = docSnap.data();
+      document.getElementById('titleInput').value = data.title || "";
+      if(data.headers) {
+          document.getElementById('hImg').value = data.headers.img;
+          document.getElementById('hCut').value = data.headers.cut;
+          document.getElementById('hNar').value = data.headers.nar;
+          document.getElementById('hNote').value = data.headers.note;
+      }
+      cards = data.cards || [];
+      render();
+    } else {
+      document.getElementById('titleInput').value = "名称未設定の絵コンテ";
+      addCard(); 
+    }
+  });
+
+  // 画像圧縮関数
+  function compressImage(file, callback) {
+    const reader = new FileReader();
+    reader.onload = function(event) {
+      const img = new Image();
+      img.onload = function() {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const MAX_WIDTH = 600;
+        let width = img.width;
+        let height = img.height;
+        
+        if (width > MAX_WIDTH) {
+          height *= MAX_WIDTH / width;
+          width = MAX_WIDTH;
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
+        callback(dataUrl);
+      };
+      img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  // 画面の描画
+  function render() {
+    cardsEl.innerHTML = '';
+    cards.forEach(function(c, idx) {
+      const el = document.createElement('div');
+      el.className = 'card';
+      el.dataset.id = c.id;
+
+      el.innerHTML = `
+        <div class="handle" draggable="true">
+          <div class="num">${String(idx + 1).padStart(2, '0')}</div>
+          <div class="grip">⋮⋮</div>
+        </div>
+        <div class="col imgcol">
+          <label class="imgbox ${c.img ? 'has-img' : ''}">
+            ${c.img ? `<img src="${c.img}">` : 'クリックして<br>画像を追加'}
+            <input type="file" accept="image/*">
+          </label>
+          ${c.img ? '<button class="clear-img">画像を削除</button>' : ''}
+        </div>
+        <div class="col cutcol">
+          <textarea class="cutText" placeholder="カットの内容">${c.cut}</textarea>
+        </div>
+        <div class="col narcol">
+          <textarea class="narText" placeholder="ナレーション・セリフ">${c.narration}</textarea>
+        </div>
+        <div class="col notecol">
+          <textarea class="noteText" placeholder="自由記入欄">${c.note}</textarea>
+        </div>
+        <div class="actions">
+          <button class="icon-btn up">↑上へ</button>
+          <button class="icon-btn down">↓下へ</button>
+          <button class="icon-btn del">削除</button>
+        </div>
+      `;
+
+      el.querySelector('.cutText').addEventListener('blur', function(e) { c.cut = e.target.value; saveToDB(); });
+      el.querySelector('.narText').addEventListener('blur', function(e) { c.narration = e.target.value; saveToDB(); });
+      el.querySelector('.noteText').addEventListener('blur', function(e) { c.note = e.target.value; saveToDB(); });
+
+      // --- ドラッグ＆ドロップのイベント処理（復元） ---
+      const handle = el.querySelector('.handle');
+      handle.addEventListener('dragstart', function(e) {
+        dragId = c.id;
+        el.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+      });
+      handle.addEventListener('dragend', function() {
+        el.classList.remove('dragging');
+        document.querySelectorAll('.card').forEach(function(x) { x.classList.remove('drop-target'); });
+      });
+      el.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        if (c.id !== dragId) el.classList.add('drop-target');
+      });
+      el.addEventListener('dragleave', function() { el.classList.remove('drop-target'); });
+      el.addEventListener('drop', function(e) {
+        e.preventDefault();
+        el.classList.remove('drop-target');
+        if (dragId === null || dragId === c.id) return;
+        
+        const fromIdx = cards.findIndex(function(x) { return x.id === dragId; });
+        const toIdx = cards.findIndex(function(x) { return x.id === c.id; });
+        
+        const moved = cards.splice(fromIdx, 1)[0];
+        cards.splice(toIdx, 0, moved);
+        dragId = null;
+        
+        saveToDB(); // 並び替え順をデータベースへ保存
+        render();
+      });
+
+      // 画像の選択・自動圧縮・保存
+      const fileInput = el.querySelector('input[type=file]');
+      fileInput.addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const label = el.querySelector('.imgbox');
+        label.innerHTML = '<div class="loading">処理中...</div>';
+
+        compressImage(file, function(compressedDataUrl) {
+          c.img = compressedDataUrl;
+          saveToDB();
+          render();
+        });
+      });
+
+      const clearBtn = el.querySelector('.clear-img');
+      if (clearBtn) clearBtn.addEventListener('click', function() { c.img = null; saveToDB(); render(); });
+
+      el.querySelector('.up').addEventListener('click', function() {
+        if (idx === 0) return;
+        let temp = cards[idx - 1]; cards[idx - 1] = cards[idx]; cards[idx] = temp;
+        saveToDB(); render();
+      });
+      el.querySelector('.down').addEventListener('click', function() {
+        if (idx === cards.length - 1) return;
+        let temp = cards[idx + 1]; cards[idx + 1] = cards[idx]; cards[idx] = temp;
+        saveToDB(); render();
+      });
+      el.querySelector('.del').addEventListener('click', function() {
+        if(confirm("このカットを削除しますか？")){ cards = cards.filter(function(x) { return x.id !== c.id; }); saveToDB(); render(); }
+      });
+
+      cardsEl.appendChild(el);
+    });
+  }
+
+  document.getElementById('addBtn').addEventListener('click', addCard);
+  document.getElementById('addBtnBottom').addEventListener('click', addCard);
+  
+  function addCard() {
+    cards.push({ id: Math.random().toString(36).slice(2, 10), img: null, cut: '', narration: '', note: '' });
+    saveToDB(); render();
+  }
+
+  document.getElementById('titleInput').addEventListener('blur', saveToDB);
+  ['hImg', 'hCut', 'hNar', 'hNote'].forEach(function(id) {
+      document.getElementById(id).addEventListener('blur', function(e) {
+          headers[id.replace('h','').toLowerCase()] = e.target.value;
+          saveToDB();
+      });
+  });
+
+  document.getElementById('pdfBtn').addEventListener('click', function() { window.print(); });
+
+  document.getElementById('layoutToggle').addEventListener('click', function(e) {
+    document.body.classList.toggle('bottom-note');
+    e.target.classList.toggle('on');
+    e.target.textContent = document.body.classList.contains('bottom-note') ? 'レイアウト：備考を右列に' : 'レイアウト：備考を下段に';
+  });
+
+  window.copyUrl = function() {
+    const copyText = document.getElementById("shareUrl");
+    copyText.select(); document.execCommand("copy");
+    alert("共同編集URLをコピーしました！");
+  }
+</script>
+</body>
+</html>
