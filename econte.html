@@ -26,7 +26,7 @@
   @media print {
     @page { margin: 0; size: A4 portrait; }
     body { padding: 15mm; background: #fff; }
-    .toolbar, .addrow, .actions, .handle .grip, .sub, .clear-img, .loading, .history-area, #viewModeAlert { display: none !important; }
+    .toolbar, .addrow, .actions, .handle .grip, .sub, .clear-img, .loading, .history-area { display: none !important; }
     .header-row { display: grid !important; }
     .card { break-inside: avoid; border: 1px solid #999; margin-bottom: 8px; }
     textarea, input { border: none !important; resize: none; background: transparent !important; }
@@ -43,26 +43,38 @@
   }
   .title-input:focus { outline: none; border-bottom: 1.5px solid var(--accent); }
   .sub { font-size: 12px; color: var(--sub); margin-top: 6px; }
-  .toolbar { display: flex; gap: 6px; flex-wrap: wrap; }
+  
+  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
   
   button, select {
-    font-family: inherit; font-size: 12px; border: 1px solid var(--line-strong); background: var(--card);
-    color: var(--ink); padding: 7px 12px; border-radius: 5px; cursor: pointer; transition: 0.2s; font-weight: 500;
+    font-family: inherit; font-size: 12.5px; border: 1px solid var(--line-strong); background: var(--card);
+    color: var(--ink); padding: 7px 14px; border-radius: 5px; cursor: pointer; transition: 0.2s; font-weight: 500;
   }
   button:hover, select:hover { background: #F1EFE6; }
   button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
   button.primary:hover { background: #0C5A45; }
-  button.danger { background: #fff; color: var(--danger); border-color: #E3C7C0; }
-  button.danger:hover { background: #FBEDEA; }
-
-  /* 閲覧モードお知らせアラート */
-  #viewModeAlert { background: #FFF3CD; color: #856404; padding: 12px; text-align: center; margin-bottom: 15px; border-radius: 5px; font-weight: bold; border: 1px solid #FFEEBA; font-size: 13px; }
+  
+  /* --- 🌟 ドロップダウンメニュー --- */
+  .dropdown { position: relative; display: inline-block; }
+  .dropdown-content {
+    display: none; position: absolute; right: 0; top: 100%; margin-top: 6px;
+    background-color: #fff; min-width: 180px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    border-radius: 6px; border: 1px solid var(--line); z-index: 100; overflow: hidden;
+  }
+  .dropdown-content.show { display: flex; flex-direction: column; }
+  .dropdown-content button {
+    width: 100%; text-align: left; border: none; border-radius: 0;
+    background: transparent; padding: 12px 16px; font-size: 12.5px;
+  }
+  .dropdown-content button:hover { background-color: #F1EFE6; }
+  .dropdown-content button.danger { color: var(--danger); }
+  .dropdown-content button.danger:hover { background-color: #FBEDEA; }
 
   /* 履歴エリア */
   .history-area { margin-bottom: 15px; display: flex; gap: 10px; align-items: center; }
   .history-select { flex: 1; max-width: 400px; padding: 6px 10px; font-size: 12px; }
 
-  /* --- 🌟 共有モーダル（ポップアップ）のデザイン --- */
+  /* --- 共有モーダル --- */
   .modal-overlay {
     position: fixed; top: 0; left: 0; width: 100%; height: 100%;
     background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center;
@@ -113,7 +125,9 @@
   body.bottom-note .notecol { border-right: none; border-top: 1px solid var(--line); }
 
   /* --- 🔒 閲覧専用モードの時のUI変更 --- */
-  body.view-mode .handle, body.view-mode .actions, body.view-mode .addrow, body.view-mode .clear-img, body.view-mode #addBtn, body.view-mode #deleteBoardBtn, body.view-mode #shareModalBtn { display: none !important; }
+  #copyBtnViewMode { display: none; }
+  body.view-mode #copyBtnViewMode { display: inline-block !important; }
+  body.view-mode .handle, body.view-mode .actions, body.view-mode .addrow, body.view-mode .clear-img, body.view-mode #addBtn, body.view-mode #shareModalBtn, body.view-mode #copyBtnMenu, body.view-mode #deleteBoardBtn { display: none !important; }
   body.view-mode .header-row { grid-template-columns: 200px 1fr 1fr 1fr; grid-template-areas: "image cutcol narcol notecol"; }
   body.view-mode .card { grid-template-columns: 200px 1fr 1fr 1fr; grid-template-areas: "image cutcol narcol notecol"; }
   body.view-mode.bottom-note .header-row { grid-template-columns: 200px 1fr 1fr; grid-template-areas: "image cutcol narcol"; }
@@ -189,21 +203,27 @@
 
 <div class="wrap" id="exportArea">
   
-  <div id="viewModeAlert">
-    👀 現在「閲覧専用モード」です。編集したい場合は「📋 複製して編集」ボタンを押して、あなた用のコピーを作成してください。
-  </div>
-
   <div class="title-row">
     <div style="flex:1;">
       <input class="title-input" id="titleInput" value="読み込み中..." placeholder="絵コンテのタイトルを入力">
       <div class="sub">共有用リンクからリアルタイムで同時編集が可能です。画像は自動で保存されます。</div>
     </div>
+    
     <div class="toolbar">
+      <button class="primary" id="copyBtnViewMode">📋 複製して編集</button>
+      
       <button class="primary" id="shareModalBtn">🔗 共有</button>
-      <button id="copyBtn">📋 複製して編集</button>
-      <button class="toggle" id="layoutToggle">レイアウト: 備考下段</button>
-      <button id="pdfBtn">PDF</button>
-      <button class="danger" id="deleteBoardBtn">🗑️ 削除</button>
+      
+      <div class="dropdown">
+        <button id="menuBtn" style="padding: 7px 12px; font-size: 14px;">•••</button>
+        <div id="menuDropdown" class="dropdown-content">
+          <button id="copyBtnMenu">📋 複製して別名保存</button>
+          <button id="pdfBtn">📄 PDFで書き出し</button>
+          <button id="layoutToggle">📐 レイアウト: 備考下段</button>
+          <button class="danger" id="deleteBoardBtn">🗑️ 完全に削除</button>
+        </div>
+      </div>
+      
       <button class="primary" id="addBtn" style="background:#1C1C1A; border-color:#1C1C1A;">＋ カット追加</button>
     </div>
   </div>
@@ -246,7 +266,7 @@
   }
   const db = firebase.firestore();
 
-  // --- 🔒 URLモード判定処理 ---
+  // URLモード判定処理
   let rawHash = window.location.hash.replace('#', '');
   let boardId = "";
   let isViewMode = false;
@@ -263,13 +283,11 @@
       window.location.hash = boardId;
   }
 
-  // UIの設定（閲覧モード時は入力や削除を制限）
   let editUrlStr = "";
   let viewUrlStr = "";
 
   if (isViewMode) {
       document.body.classList.add('view-mode');
-      document.getElementById('viewModeAlert').style.display = 'block';
       document.getElementById('titleInput').readOnly = true;
       document.getElementById('hImg').readOnly = true;
       document.getElementById('hCut').readOnly = true;
@@ -287,7 +305,18 @@
   let isLocalChange = false;
   const cardsEl = document.getElementById('cards');
 
-  // --- モーダル制御 ---
+  // メニュー開閉制御
+  const menuBtn = document.getElementById('menuBtn');
+  const menuDropdown = document.getElementById('menuDropdown');
+  menuBtn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    menuDropdown.classList.toggle('show');
+  });
+  document.addEventListener('click', function() {
+    menuDropdown.classList.remove('show');
+  });
+
+  // モーダル制御
   const shareModal = document.getElementById('shareModal');
   const shareModalBtn = document.getElementById('shareModalBtn');
   const closeShareModal = document.getElementById('closeShareModal');
@@ -315,7 +344,7 @@
     shareModal.classList.remove('active');
   }
 
-  // --- 履歴管理 ---
+  // 履歴管理
   const HISTORY_KEY = "econte_history_v1";
 
   function renderHistorySelect() {
@@ -515,8 +544,8 @@
       });
   }
 
-  // --- 🌟 コピー保存（複製して編集開始）機能 ---
-  document.getElementById('copyBtn').addEventListener('click', function() {
+  // 複製して編集開始
+  function handleCopy() {
     const msg = isViewMode ? 
         "この絵コンテを複製して、あなたが編集できる新しいコピーを作成しますか？" : 
         "この絵コンテを複製して、新しいURLで別物として保存しますか？";
@@ -538,7 +567,10 @@
           alert("複製に失敗しました: " + error.message);
       });
     }
-  });
+  }
+  
+  document.getElementById('copyBtnViewMode').addEventListener('click', handleCopy);
+  document.getElementById('copyBtnMenu').addEventListener('click', handleCopy);
 
   // 丸ごと削除機能
   document.getElementById('deleteBoardBtn').addEventListener('click', function() {
