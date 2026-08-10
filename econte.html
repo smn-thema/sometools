@@ -590,8 +590,21 @@
     }
   });
 
-  document.getElementById('pdfBtn').addEventListener('click', function() { window.print(); });
-
+  document.getElementById('pdfBtn').addEventListener('click', function() {
+    // 印刷前にすべてのテキストエリアを中身に合わせて広げる
+    const textareas = document.querySelectorAll('textarea');
+    textareas.forEach(function(ta) {
+      ta.style.height = 'auto';
+      ta.style.height = ta.scrollHeight + 'px';
+    });
+    
+    window.print(); // 印刷ダイアログを開く
+    
+    // 印刷ダイアログが閉じた後、元の高さに戻す
+    textareas.forEach(function(ta) {
+      ta.style.height = '100px'; 
+    });
+  });
   document.getElementById('layoutToggle').addEventListener('click', function(e) {
     document.body.classList.toggle('bottom-note');
     e.target.classList.toggle('on');
