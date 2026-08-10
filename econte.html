@@ -58,7 +58,7 @@
   .dropdown { position: relative; display: inline-block; }
   .dropdown-content {
     display: none; position: absolute; right: 0; top: 100%; margin-top: 6px;
-    background-color: #fff; min-width: 180px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    background-color: #fff; min-width: 200px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     border-radius: 6px; border: 1px solid var(--line); z-index: 100; overflow: hidden;
   }
   .dropdown-content.show { display: flex; flex-direction: column; }
@@ -176,6 +176,7 @@
 </head>
 <body>
 
+<!-- 共有用モーダル -->
 <div id="shareModal" class="modal-overlay">
   <div class="modal-content">
     <div class="modal-header">
@@ -211,14 +212,16 @@
     
     <div class="toolbar">
       <button class="primary" id="copyBtnViewMode">📋 複製して編集</button>
-      
       <button class="primary" id="shareModalBtn">🔗 共有</button>
       
+      <!-- 🌟 メニューにエクスポート機能を追加 -->
       <div class="dropdown">
         <button id="menuBtn" style="padding: 7px 12px; font-size: 14px;">•••</button>
         <div id="menuDropdown" class="dropdown-content">
-          <button id="copyBtnMenu">📋 複製して別名保存</button>
           <button id="pdfBtn">📄 PDFで書き出し</button>
+          <button id="csvBtn">📊 CSV形式で書き出し (表計算用)</button>
+          <button id="txtBtn">📝 テキストで書き出し (台本用)</button>
+          <button id="copyBtnMenu">📋 複製して別名保存</button>
           <button id="layoutToggle">📐 レイアウト: 備考下段</button>
           <button class="danger" id="deleteBoardBtn">🗑️ 完全に削除</button>
         </div>
@@ -572,6 +575,87 @@
   document.getElementById('copyBtnViewMode').addEventListener('click', handleCopy);
   document.getElementById('copyBtnMenu').addEventListener('click', handleCopy);
 
+  // 🌟 PDF書き出し (裏技コード適用済)
+  document.getElementById('pdfBtn').addEventListener('click', function() {
+    const textareas = document.querySelectorAll('textarea');
+    const swapItems = [];
+
+    // 入力欄をただのテキスト(div)に変換
+    textareas.forEach(function(ta) {
+      const div = document.createElement('div');
+      div.textContent = ta.value || ' '; 
+      div.style.whiteSpace = 'pre-wrap';
+      div.style.wordBreak = 'break-word';
+      div.style.fontSize = '12.5px';
+      div.style.lineHeight = '1.6';
+      div.style.padding = '8px';
+      
+      ta.style.display = 'none'; 
+      ta.parentNode.insertBefore(div, ta); 
+      swapItems.push({ ta: ta, div: div });
+    });
+    
+    menuDropdown.classList.remove('show');
+    window.print(); 
+    
+    // 印刷ダイアログが閉じた直後に元の入力欄に戻す
+    swapItems.forEach(function(item) {
+      item.ta.style.display = '';
+      item.div.parentNode.removeChild(item.div);
+    });
+  });
+
+  // 🌟 CSV形式で書き出し (スプレッドシート用)
+  document.getElementById('csvBtn').addEventListener('click', function() {
+    const bom = new Uint8Array([0xEF, 0xBB, 0xBF]); // Excelの文字化け防止(BOM)
+    let csvData = 'カット番号,カット内容,ナレーション,備考\n';
+    
+    cards.forEach(function(c, i) {
+      const num = String(i + 1).padStart(2, '0');
+      // カンマや改行を含む文章を正しくCSVにするための処理
+      const cut = '"' + (c.cut || '').replace(/"/g, '""') + '"';
+      const nar = '"' + (c.narration || '').replace(/"/g, '""') + '"';
+      const note = '"' + (c.note || '').replace(/"/g, '""') + '"';
+      
+      csvData += [num, cut, nar, note].join(',') + '\n';
+    });
+    
+    const blob = new Blob([bom, csvData], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const filename = (document.getElementById('titleInput').value || '絵コンテ') + '.csv';
+    
+    a.href = url;
+    a.download = filename;
+    a.click();
+    window.URL.revokeObjectURL(url);
+    menuDropdown.classList.remove('show');
+  });
+
+  // 🌟 テキストで書き出し (台本・ドキュメント用)
+  document.getElementById('txtBtn').addEventListener('click', function() {
+    const title = document.getElementById('titleInput').value || '絵コンテ';
+    let txtData = '【 ' + title + ' 】\n================================\n\n';
+    
+    cards.forEach(function(c, i) {
+      const num = String(i + 1).padStart(2, '0');
+      txtData += '--- カット ' + num + ' ---\n';
+      if (c.cut) txtData += '[内容]\n' + c.cut + '\n\n';
+      if (c.narration) txtData += '[ナレーション]\n' + c.narration + '\n\n';
+      if (c.note) txtData += '[備考]\n' + c.note + '\n\n';
+    });
+    
+    const blob = new Blob([txtData], { type: 'text/plain' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    
+    a.href = url;
+    a.download = title + '.txt';
+    a.click();
+    window.URL.revokeObjectURL(url);
+    menuDropdown.classList.remove('show');
+  });
+
   // 丸ごと削除機能
   document.getElementById('deleteBoardBtn').addEventListener('click', function() {
     if (confirm("本当にこの絵コンテのデータ（画像を含む）を完全に削除しますか？\nこのURLにアクセスしている全員の画面から消去され、復元はできません。")) {
@@ -590,25 +674,11 @@
     }
   });
 
-  document.getElementById('pdfBtn').addEventListener('click', function() {
-    // 印刷前にすべてのテキストエリアを中身に合わせて広げる
-    const textareas = document.querySelectorAll('textarea');
-    textareas.forEach(function(ta) {
-      ta.style.height = 'auto';
-      ta.style.height = ta.scrollHeight + 'px';
-    });
-    
-    window.print(); // 印刷ダイアログを開く
-    
-    // 印刷ダイアログが閉じた後、元の高さに戻す
-    textareas.forEach(function(ta) {
-      ta.style.height = '100px'; 
-    });
-  });
   document.getElementById('layoutToggle').addEventListener('click', function(e) {
     document.body.classList.toggle('bottom-note');
     e.target.classList.toggle('on');
-    e.target.textContent = document.body.classList.contains('bottom-note') ? 'レイアウト: 備考右列' : 'レイアウト: 備考下段';
+    e.target.textContent = document.body.classList.contains('bottom-note') ? '📐 レイアウト: 備考右列' : '📐 レイアウト: 備考下段';
+    menuDropdown.classList.remove('show');
   });
 
   renderHistorySelect();
